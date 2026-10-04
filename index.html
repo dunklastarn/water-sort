@@ -1046,6 +1046,23 @@ $('addTube').addEventListener('click', function () {
   save();
 });
 
+// Hidden hard reset: tap the "Level" title 10 times in a row, then confirm.
+var resetTaps = 0, resetTimer = null;
+$('level').addEventListener('pointerdown', function () {
+  clearTimeout(resetTimer);
+  resetTimer = setTimeout(function () { resetTaps = 0; }, 1500); // taps must keep coming
+  if (++resetTaps < 10) return;
+  resetTaps = 0;
+  if (!window.confirm('Reset all progress?\n\nThis erases your score and sends you back to level 1. It can\'t be undone.')) return;
+  cancelAnimations();
+  disarm();
+  T = { score: 0, solved: 0, perfect: 0 };
+  lastWorth = null;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  hideOverlay();
+  startLevel(1);
+});
+
 $('sound').addEventListener('click', function () {
   muted = !muted;
   if (!muted) SND.select();
