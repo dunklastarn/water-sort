@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Water Sort</title>
+<meta name="theme-color" content="#e8edf1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161d25" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root {
+  --bg: #e8edf1;
+  --ink: #1d2833;
+  --ink-soft: #5b6874;
+  --glass: rgba(255,255,255,.45);
+  --edge: rgba(29,40,51,.32);
+  --shine: rgba(255,255,255,.7);
+  --btn: rgba(29,40,51,.07);
+  --btn-press: rgba(29,40,51,.14);
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161d25;
+    --ink: #e4eaef;
+    --ink-soft: #8f9ba6;
+    --glass: rgba(255,255,255,.05);
+    --edge: rgba(228,234,239,.34);
+    --shine: rgba(255,255,255,.16);
+    --btn: rgba(228,234,239,.08);
+    --btn-press: rgba(228,234,239,.16);
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  display: flex; flex-direction: column;
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overflow: hidden;
+}
+header {
+  padding: 18px 20px 0;
+  text-align: center;
+}
+#level {
+  margin: 0;
+  font-weight: 300;
+  font-size: 2.1rem;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+#level span { color: var(--ink-soft); font-size: .5em; font-weight: 500; letter-spacing: .02em; margin-right: .4em; vertical-align: .35em; }
+#hint {
+  height: 1.4em; margin: 4px 0 0; font-size: .9rem; color: var(--ink-soft);
+  opacity: 0; transition: opacity .3s;
+}
+#hint.show { opacity: 1; }
+
+main { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; }
+#board { position: relative; display: flex; flex-direction: column; align-items: center; }
+.row { display: flex; justify-content: center; }
+.bottle {
+  position: relative;
+  transition: transform .2s ease;
+  transform-origin: 50% 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.bottle.selected { transform: translateY(-18px); }
+.bottle.pouring { z-index: 5; transition: transform .26s cubic-bezier(.3,.7,.3,1); }
+.bottle.shake { animation: shake .28s; }
+@keyframes shake { 0%,100% { translate: 0 } 25% { translate: -4px 0 } 75% { translate: 4px 0 } }
+.glass {
+  position: absolute; inset: 0;
+  border: 2px solid var(--edge);
+  border-top-width: 0;
+  background: var(--glass);
+  overflow: hidden;
+  display: flex; flex-direction: column-reverse;
+}
+.glass::after {
+  content: ""; position: absolute; top: 14%; bottom: 14%; left: 16%; width: 9%;
+  border-radius: 99px; background: var(--shine); pointer-events: none;
+}
+.rim {
+  position: absolute; left: -4px; right: -4px; top: 0; height: 5px;
+  border-radius: 3px; background: var(--edge);
+}
+.unit { flex: none; width: 100%; }
+.unit.grow { animation: grow var(--t, .36s) ease-out both; }
+.unit.shrink { animation: shrink var(--t, .36s) ease-in both; }
+@keyframes grow { from { height: 0 } }
+@keyframes shrink { to { height: 0 } }
+.stopper {
+  position: absolute; left: 10%; right: 10%; top: -10px; height: 12px;
+  border-radius: 4px 4px 2px 2px; background: var(--ink-soft);
+  animation: drop .3s cubic-bezier(.3,1.6,.5,1) both;
+}
+@keyframes drop { from { transform: translateY(-14px); opacity: 0 } }
+#stream {
+  position: absolute; width: 6px; border-radius: 3px; z-index: 4;
+  transform-origin: 50% 0; transform: scaleY(0); opacity: 0;
+  transition: transform .14s ease-out, opacity .1s;
+  pointer-events: none;
+}
+#stream.on { transform: scaleY(1); opacity: 1; }
+
+footer {
+  display: flex; justify-content: center; align-items: center; gap: 14px;
+  padding: 10px 20px 22px;
+}
+button {
+  font: inherit; color: var(--ink); background: var(--btn);
+  border: 0; border-radius: 16px; padding: 12px 18px;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 1rem; font-weight: 500; cursor: pointer;
+}
+button:active { background: var(--btn-press); }
+button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+button svg { width: 22px; height: 22px; }
+#undo { padding: 14px 30px; font-size: 1.1rem; }
+#undo:disabled { opacity: .4; }
+#sound { padding: 12px 14px; }
+
+#overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+#overlay.show { opacity: 1; pointer-events: auto; }
+#overlay p { margin: 0; font-size: 1.6rem; font-weight: 300; }
+#overlay button { padding: 14px 34px; font-size: 1.1rem; background: var(--ink); color: var(--bg); }
+#overlay button[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bottle, .bottle.pouring { transition: none; }
+  .unit.grow, .unit.shrink, .stopper, .bottle.shake { animation: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="level"><span>Level</span><b id="levelNum">1</b></h1>
+  <p id="hint">No moves left. Undo or restart.</p>
+</header>
+<main><div id="board"></div></main>
+<footer>
+  <button id="restart" aria-label="Restart level">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg>
+    Restart
+  </button>
+  <button id="undo" aria-label="Undo move">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+    Undo
+  </button>
+  <button id="sound" aria-label="Sound on">
+    <svg id="sndOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+    <svg id="sndOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>
+  </button>
+</footer>
+<div id="overlay" role="dialog" aria-live="polite"><p id="overlayText"></p><button id="next" hidden>Next level</button></div>
+
+<script type="text/plain" id="gen-src">
+// ---- Water sort level generator ----
+// Deterministic: level N always produces the same puzzle.
+// Every puzzle is verified solvable by a search solver, then the hardest of K
+// candidates is chosen, with K growing through each tier so difficulty climbs.
+
+var GEN = (function () {
+  var EMPTY_TUBES = 2;
+  // [first level, colors, bottle capacity]
+  var TIERS = [[1,3,4],[3,4,4],[6,5,4],[11,6,4],[18,7,4],[28,8,4],[42,9,4],[60,10,4],
+               [85,11,4],[115,12,4],[155,13,4],[205,14,4],[260,12,5],[300,13,5],[350,14,5],[450,14,6]];
+  // Target difficulty score by level (piecewise linear, always rising, then holds)
+  var TARGET = [[1,1.0],[3,1.4],[6,1.7],[11,2.4],[18,3.0],[28,3.8],[42,4.4],[60,4.9],[85,5.3],
+                [115,5.6],[155,5.9],[205,6.3],[260,6.8],[300,6.9],[350,7.1],[450,7.4],[700,7.8],[1000,8.0]];
+  var CANDIDATES = 10;
+
+  function rng(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function params(level) {
+    var i = 0;
+    while (i + 1 < TIERS.length && level >= TIERS[i + 1][0]) i++;
+    var target = TARGET[TARGET.length - 1][1];
+    for (var j = 0; j + 1 < TARGET.length; j++) {
+      if (level < TARGET[j + 1][0]) {
+        var a = TARGET[j], b = TARGET[j + 1];
+        target = a[1] + (b[1] - a[1]) * (level - a[0]) / (b[0] - a[0]);
+        break;
+      }
+    }
+    return { colors: TIERS[i][1], cap: TIERS[i][2], tubes: TIERS[i][1] + EMPTY_TUBES, target: target };
+  }
+
+  function isUniform(t) {
+    for (var i = 1; i < t.length; i++) if (t[i] !== t[0]) return false;
+    return true;
+  }
+  function isDone(t, cap) { return t.length === cap && isUniform(t); }
+  function solved(tubes, cap) {
+    for (var i = 0; i < tubes.length; i++) {
+      var t = tubes[i];
+      if (t.length && !isDone(t, cap)) return false;
+    }
+    return true;
+  }
+  function key(tubes) {
+    var s = [];
+    for (var i = 0; i < tubes.length; i++) s.push(tubes[i].join(','));
+    s.sort();
+    return s.join('|');
+  }
+  function topRun(t) {
+    var n = 0, c = t[t.length - 1];
+    for (var i = t.length - 1; i >= 0 && t[i] === c; i--) n++;
+    return n;
+  }
+
+  // Candidate moves with pruning of pointless ones. Returns [src,dst,amount].
+  function moves(tubes, cap) {
+    var out = [], firstEmpty = -1;
+    for (var d = 0; d < tubes.length; d++) if (!tubes[d].length) { firstEmpty = d; break; }
+    for (var s = 0; s < tubes.length; s++) {
+      var src = tubes[s];
+      if (!src.length || isDone(src, cap)) continue;
+      var run = topRun(src), col = src[src.length - 1];
+      for (var d2 = 0; d2 < tubes.length; d2++) {
+        if (d2 === s) continue;
+        var dst = tubes[d2];
+        if (dst.length >= cap) continue;
+        if (dst.length === 0) {
+          if (d2 !== firstEmpty) continue;
+          if (run === src.length) continue; // whole tube into empty: no-op
+          out.push([s, d2, Math.min(run, cap)]);
+        } else if (dst[dst.length - 1] === col) {
+          out.push([s, d2, Math.min(run, cap - dst.length)]);
+        }
+      }
+    }
+    return out;
+  }
+
+  function apply(tubes, m) {
+    var next = tubes.slice();
+    var src = tubes[m[0]].slice(), dst = tubes[m[1]].slice();
+    for (var i = 0; i < m[2]; i++) dst.push(src.pop());
+    next[m[0]] = src; next[m[1]] = dst;
+    return next;
+  }
+
+  // Depth-first solver with memo. Returns solution length or -1 (unsolvable / gave up).
+  function solve(start, cap, limit) {
+    var seen = new Set();
+    var stack = [{ t: start, depth: 0 }];
+    seen.add(key(start));
+    var nodes = 0;
+    while (stack.length) {
+      var cur = stack.pop();
+      if (solved(cur.t, cap)) return cur.depth;
+      if (++nodes > limit) return -1;
+      var ms = moves(cur.t, cap);
+      // Prefer pours onto matching color (pushed last = explored first)
+      ms.sort(function (a, b) {
+        var ea = cur.t[a[1]].length === 0 ? 0 : 1;
+        var eb = cur.t[b[1]].length === 0 ? 0 : 1;
+        return ea - eb;
+      });
+      for (var i = 0; i < ms.length; i++) {
+        var n = apply(cur.t, ms[i]);
+        var k = key(n);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        stack.push({ t: n, depth: cur.depth + 1 });
+      }
+    }
+    return -1;
+  }
+
+  // Simulated casual player: mostly makes "obvious" pours (onto a matching color),
+  // sometimes uses an empty tube. How often does it get stuck? 0 = easy, 1 = brutal.
+  function stuckRate(start, cap, rand, plays, greed) {
+    var stuck = 0;
+    for (var p = 0; p < plays; p++) {
+      var t = start, seen = new Set([key(t)]), steps = 0;
+      while (!solved(t, cap) && steps < 400) {
+        var ms = moves(t, cap), good = [], other = [];
+        for (var i = 0; i < ms.length; i++) {
+          var n = apply(t, ms[i]), k = key(n);
+          if (seen.has(k)) continue;
+          (t[ms[i][1]].length ? good : other).push([n, k]);
+        }
+        var opts = (good.length && rand() < greed) ? good : good.concat(other);
+        if (!opts.length) break;
+        var pick = opts[Math.floor(rand() * opts.length)];
+        t = pick[0]; seen.add(pick[1]); steps++;
+      }
+      if (!solved(t, cap)) stuck++;
+    }
+    return stuck / plays;
+  }
+
+  // Search effort: nodes the solver needs (more backtracking = trickier puzzle)
+  function effort(start, cap) {
+    var seen = new Set(), stack = [start], nodes = 0;
+    seen.add(key(start));
+    while (stack.length) {
+      var t = stack.pop();
+      if (solved(t, cap)) return nodes;
+      if (++nodes > 40000) return nodes;
+      var ms = moves(t, cap);
+      ms.sort(function (a, b) { return (t[a[1]].length ? 1 : 0) - (t[b[1]].length ? 1 : 0); });
+      for (var i = 0; i < ms.length; i++) {
+        var n = apply(t, ms[i]), k = key(n);
+        if (!seen.has(k)) { seen.add(k); stack.push(n); }
+      }
+    }
+    return nodes;
+  }
+
+  function deal(p, rand) {
+    var pool = [];
+    for (var c = 0; c < p.colors; c++) for (var i = 0; i < p.cap; i++) pool.push(c);
+    for (var j = pool.length - 1; j > 0; j--) {
+      var r = Math.floor(rand() * (j + 1)), tmp = pool[j]; pool[j] = pool[r]; pool[r] = tmp;
+    }
+    var tubes = [];
+    for (var t = 0; t < p.colors; t++) tubes.push(pool.slice(t * p.cap, t * p.cap + p.cap));
+    for (var e = 0; e < EMPTY_TUBES; e++) tubes.push([]);
+    return tubes;
+  }
+
+  function badDeal(tubes, cap) {
+    // Reject deals with an already-finished tube or a tube that's 3+ of one color
+    for (var i = 0; i < tubes.length; i++) {
+      var t = tubes[i];
+      if (t.length === cap && topRun(t) >= 3) return true;
+      if (t.length === cap && t[0] === t[1] && t[1] === t[2]) return true;
+    }
+    return false;
+  }
+
+  function generate(level) {
+    var p = params(level);
+    var rand = rng(level * 2654435761 + 12345);
+    var best = null, found = 0, attempts = 0;
+    while (found < CANDIDATES && attempts < 300) {
+      attempts++;
+      var tubes = deal(p, rand);
+      if (badDeal(tubes, p.cap)) continue;
+      var len = solve(tubes, p.cap, 40000);
+      if (len < 0) continue;
+      found++;
+      // Blend: how often a casual player gets stuck, how much backtracking a
+      // solver needs (traps), and solution length.
+      var score = stuckRate(tubes, p.cap, rand, 30, 0.9) * 3 +
+                  Math.log(effort(tubes, p.cap) + 1) / Math.LN10 + len / 100;
+      var dist = Math.abs(score - p.target);
+      if (!best || dist < best.dist) best = { tubes: tubes, score: score, len: len, dist: dist };
+    }
+    return { level: level, cap: p.cap, colors: p.colors, tubes: best.tubes, score: best.score };
+  }
+
+  return { generate: generate, params: params };
+})();
+
+if (typeof module !== 'undefined') module.exports = GEN;
+if (typeof self !== 'undefined' && typeof window === 'undefined' && typeof module === 'undefined') {
+  self.onmessage = function (e) {
+    self.postMessage(GEN.generate(e.data.level));
+  };
+}
+
+</script>
+<script>
+(function () {
+'use strict';
+
+var COLORS = ['#e53935','#fb8c00','#fdd835','#43a047','#1e88e5','#8e24aa',
+              '#00acc1','#f06292','#6d4c41','#9e9e9e','#c0ca33','#283593',
+              '#ffccbc','#00695c'];
+var SAVE_KEY = 'watersort.v1';
+var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+var S = null;          // { level, cap, start, tubes, history, solved }
+var muted = false;
+var selected = -1;
+var busy = false;
+var geom = null;       // layout numbers
+var els = [];          // bottle elements
+
+var $ = function (id) { return document.getElementById(id); };
+var board = $('board');
+
+// ---------- persistence ----------
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: S, muted: muted })); } catch (e) {}
+}
+function load() {
+  try {
+    var raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    muted = !!d.muted;
+    return d.s && d.s.tubes ? d.s : null;
+  } catch (e) { return null; }
+}
+var copy = function (t) { return t.map(function (x) { return x.slice(); }); };
+
+// ---------- level generation (in a worker) ----------
+var genSrc = $('gen-src').textContent;
+var worker = null, pending = {}, cache = {};
+try {
+  worker = new Worker(URL.createObjectURL(new Blob([genSrc], { type: 'text/javascript' })));
+  worker.onmessage = function (e) {
+    var r = e.data; cache[r.level] = r;
+    (pending[r.level] || []).forEach(function (f) { f(r); });
+    delete pending[r.level];
+  };
+  worker.onerror = function () { worker = null; };
+} catch (e) { worker = null; }
+
+function getLevel(level) {
+  return new Promise(function (resolve) {
+    if (cache[level]) return resolve(cache[level]);
+    if (worker) {
+      var first = !pending[level];
+      (pending[level] = pending[level] || []).push(resolve);
+      if (first) worker.postMessage({ level: level });
+    } else {
+      setTimeout(function () {
+        if (typeof GEN === 'undefined') (0, eval)(genSrc);
+        cache[level] = GEN.generate(level);
+        resolve(cache[level]);
+      }, 30);
+    }
+  });
+}
+
+// ---------- rules ----------
+function topRun(t) {
+  var n = 0, c = t[t.length - 1];
+  for (var i = t.length - 1; i >= 0 && t[i] === c; i--) n++;
+  return n;
+}
+function isDone(t) {
+  if (t.length !== S.cap) return false;
+  for (var i = 1; i < t.length; i++) if (t[i] !== t[0]) return false;
+  return true;
+}
+function pourAmount(a, b) {
+  var src = S.tubes[a], dst = S.tubes[b];
+  if (a === b || !src.length || dst.length >= S.cap) return 0;
+  if (dst.length && dst[dst.length - 1] !== src[src.length - 1]) return 0;
+  return Math.min(topRun(src), S.cap - dst.length);
+}
+function isSolved() {
+  return S.tubes.every(function (t) { return !t.length || isDone(t); });
+}
+function hasMoves() {
+  for (var a = 0; a < S.tubes.length; a++) {
+    if (isDone(S.tubes[a])) continue;
+    for (var b = 0; b < S.tubes.length; b++) if (pourAmount(a, b)) return true;
+  }
+  return false;
+}
+
+// ---------- sound (synthesized, no files) ----------
+var ac = null;
+function audio() {
+  if (muted) return null;
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tone(type, f0, f1, start, dur, vol) {
+  var c = audio(); if (!c) return;
+  var o = c.createOscillator(), g = c.createGain(), t = c.currentTime + start;
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(c.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+var noiseBuf = null;
+var SND = {
+  select: function () { tone('triangle', 880, 880, 0, 0.05, 0.08); },
+  pour: function (units, dur) {
+    var c = audio(); if (!c) return;
+    // soft hiss of running water
+    if (!noiseBuf) {
+      noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    var n = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain(), t = c.currentTime;
+    n.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.8;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(bp).connect(g).connect(c.destination); n.start(t); n.stop(t + dur + 0.05);
+    // glugs, rising as the bottle fills
+    var count = Math.max(2, units * 2);
+    for (var k = 0; k < count; k++) {
+      var base = 260 + k * 45 + Math.random() * 40;
+      tone('sine', base, base * 2.1, k * (dur / count), 0.07, 0.18);
+    }
+  },
+  done: function () {
+    tone('sine', 1568, 1568, 0, 0.7, 0.12);
+    tone('sine', 2349, 2349, 0.01, 0.55, 0.07);
+    tone('sine', 3136, 3136, 0.02, 0.4, 0.04);
+  },
+  win: function () {
+    [523, 659, 784, 1047].forEach(function (f, i) { tone('triangle', f, f, 0.15 + i * 0.11, 0.45, 0.14); });
+  },
+  bad: function () { tone('sine', 150, 110, 0, 0.14, 0.18); },
+  undo: function () { tone('triangle', 520, 360, 0, 0.08, 0.07); }
+};
+
+// ---------- layout + rendering ----------
+function layout() {
+  var n = S.tubes.length;
+  var main = board.parentElement;
+  var availW = Math.min(main.clientWidth, 640) - 24;
+  var availH = main.clientHeight - 24;
+  var perRow = n <= 6 ? n : Math.ceil(n / 2);
+  var rows = Math.ceil(n / perRow);
+  var best = null;
+  for (var w = 64; w >= 18; w--) {
+    var gap = Math.round(w * 0.38);
+    var neck = Math.round(w * 0.45);
+    var unit = Math.round(w * (S.cap > 4 ? 0.7 : 0.82));
+    var h = neck + unit * S.cap;
+    var rowGap = Math.max(34, Math.round(w * 0.9));
+    var totalW = perRow * w + (perRow - 1) * gap;
+    var totalH = rows * h + (rows - 1) * rowGap;
+    if (totalW <= availW && totalH <= availH) { best = { w: w, gap: gap, neck: neck, unit: unit, h: h, rowGap: rowGap, perRow: perRow }; break; }
+  }
+  geom = best || { w: 18, gap: 6, neck: 8, unit: 14, h: 8 + 14 * S.cap, rowGap: 30, perRow: perRow };
+}
+
+function build() {
+  layout();
+  board.innerHTML = '';
+  els = [];
+  var row;
+  S.tubes.forEach(function (_, i) {
+    if (i % geom.perRow === 0) {
+      row = document.createElement('div');
+      row.className = 'row';
+      if (i) row.style.marginTop = geom.rowGap + 'px';
+      board.appendChild(row);
+    }
+    var b = document.createElement('div');
+    b.className = 'bottle';
+    b.style.width = geom.w + 'px';
+    b.style.height = geom.h + 'px';
+    if (i % geom.perRow) b.style.marginLeft = geom.gap + 'px';
+    b.innerHTML = '<div class="glass"></div><div class="rim"></div>';
+    b.querySelector('.glass').style.borderRadius = '0 0 ' + geom.w / 2 + 'px ' + geom.w / 2 + 'px';
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); tap(i); });
+    row.appendChild(b);
+    els.push(b);
+  });
+  var stream = document.createElement('div');
+  stream.id = 'stream';
+  board.appendChild(stream);
+  S.tubes.forEach(function (_, i) { drawBottle(i); });
+}
+
+// opts: { grow: n } animates the top n units filling; { shrink: n } animates the top n draining
+function drawBottle(i, opts, dur) {
+  opts = opts || {};
+  var t = S.tubes[i];
+  var glass = els[i].querySelector('.glass');
+  var html = '';
+  var units = opts.shrinkUnits ? t.concat(opts.shrinkUnits) : t;
+  for (var k = 0; k < units.length; k++) {
+    var cls = 'unit';
+    if (opts.grow && k >= t.length - opts.grow) cls += ' grow';
+    if (opts.shrinkUnits && k >= t.length) cls += ' shrink';
+    html += '<div class="' + cls + '" style="height:' + geom.unit + 'px;background:' + COLORS[units[k]] +
+      (dur ? ';--t:' + dur + 'ms' : '') + '"></div>';
+  }
+  glass.innerHTML = html;
+  var stop = els[i].querySelector('.stopper');
+  if (isDone(t) && !stop && !opts.noStopper) {
+    stop = document.createElement('div');
+    stop.className = 'stopper';
+    if (opts.instant) stop.style.animation = 'none';
+    els[i].appendChild(stop);
+  } else if (!isDone(t) && stop) stop.remove();
+}
+
+function drawAll() { S.tubes.forEach(function (_, i) { drawBottle(i, { instant: true }); }); }
+
+function updateChrome() {
+  $('levelNum').textContent = S.level;
+  $('undo').disabled = !S.history.length;
+  $('hint').classList.toggle('show', !S.solved && !isSolved() && !hasMoves());
+  $('sndOn').hidden = muted; $('sndOff').hidden = !muted;
+  $('sound').setAttribute('aria-label', muted ? 'Sound off' : 'Sound on');
+}
+
+function select(i) {
+  if (selected >= 0) els[selected].classList.remove('selected');
+  selected = i;
+  if (i >= 0) els[i].classList.add('selected');
+}
+
+// ---------- interaction ----------
+function tap(i) {
+  if (busy || S.solved) return;
+  if (selected < 0) {
+    if (!S.tubes[i].length || isDone(S.tubes[i])) { SND.bad(); shake(i); return; }
+    select(i); SND.select(); return;
+  }
+  if (selected === i) { select(-1); return; }
+  var amt = pourAmount(selected, i);
+  if (!amt) {
+    if (S.tubes[i].length && !isDone(S.tubes[i])) { select(i); SND.select(); }
+    else { SND.bad(); shake(i); select(-1); }
+    return;
+  }
+  pour(selected, i, amt);
+}
+
+function shake(i) {
+  var b = els[i];
+  b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+}
+
+function pour(a, b, amt) {
+  busy = true;
+  var src = els[a], dst = els[b];
+  var before = copy(S.tubes);
+  var color = S.tubes[a][S.tubes[a].length - 1];
+  var dstLenBefore = S.tubes[b].length;
+
+  // commit the move to state immediately (so an interrupted animation can't lose it)
+  S.history.push(before);
+  for (var k = 0; k < amt; k++) S.tubes[b].push(S.tubes[a].pop());
+  var completed = isDone(S.tubes[b]);
+  var won = isSolved();
+  S.solved = won;
+  save();
+
+  var fill = 260 + amt * 90;
+  if (reduceMotion) {
+    select(-1);
+    drawBottle(a); drawBottle(b);
+    SND.pour(amt, fill / 1000);
+    if (completed) setTimeout(SND.done, 150);
+    finish(won);
+    return;
+  }
+
+  // fly the source bottle over the target and tip it
+  var w = geom.w;
+  // .bottle offsets are relative to #board (its nearest positioned ancestor)
+  var sx = src.offsetLeft + w / 2, sy = src.offsetTop;
+  var tx = dst.offsetLeft + w / 2, ty = dst.offsetTop;
+  var side = tx >= sx ? 1 : -1;
+  var mouthX = tx - side * w * 0.12, mouthY = ty - w * 0.55;
+
+  selected = -1;
+  src.classList.remove('selected');
+  src.classList.add('pouring');
+  src.style.transform = 'translate(' + (mouthX - sx) + 'px,' + (mouthY - sy) + 'px) rotate(' + (side * 82) + 'deg)';
+
+  setTimeout(function () {
+    var stream = $('stream');
+    stream.style.background = COLORS[color];
+    stream.style.left = (mouthX - 3) + 'px';
+    stream.style.top = mouthY + 'px';
+    stream.style.height = (ty + geom.neck + (S.cap - dstLenBefore) * geom.unit - mouthY) + 'px';
+    stream.classList.add('on');
+
+    var drained = before[a].slice(before[a].length - amt);
+    drawBottle(a, { shrinkUnits: drained }, fill);
+    drawBottle(b, { grow: amt, noStopper: true }, fill);
+    SND.pour(amt, fill / 1000);
+
+    setTimeout(function () {
+      stream.classList.remove('on');
+      drawBottle(a);
+      drawBottle(b);
+      if (completed) SND.done();
+      src.style.transform = '';
+      setTimeout(function () { src.classList.remove('pouring'); }, 270);
+      finish(won);
+    }, fill);
+  }, 270);
+}
+
+function finish(won) {
+  busy = false;
+  updateChrome();
+  if (won) {
+    setTimeout(function () {
+      SND.win();
+      showOverlay('Level ' + S.level + ' solved', true);
+    }, 450);
+  }
+}
+
+function showOverlay(text, withButton) {
+  $('overlayText').textContent = text;
+  $('next').hidden = !withButton;
+  $('overlay').classList.add('show');
+  if (withButton) setTimeout(function () { $('next').focus(); }, 50);
+}
+function hideOverlay() { $('overlay').classList.remove('show'); }
+
+function startLevel(level) {
+  busy = true;
+  var t = setTimeout(function () { showOverlay('Mixing level ' + level + '…', false); }, 120);
+  getLevel(level).then(function (r) {
+    clearTimeout(t);
+    S = { level: level, cap: r.cap, start: copy(r.tubes), tubes: copy(r.tubes), history: [], solved: false };
+    save();
+    selected = -1;
+    build();
+    updateChrome();
+    hideOverlay();
+    busy = false;
+    getLevel(level + 1); // prepare the next one in the background
+  });
+}
+
+$('undo').addEventListener('click', function () {
+  if (busy || !S.history.length) return;
+  S.tubes = S.history.pop();
+  S.solved = false;
+  select(-1);
+  drawAll();
+  SND.undo();
+  updateChrome();
+  save();
+});
+$('restart').addEventListener('click', function () {
+  if (busy) return;
+  if (JSON.stringify(S.tubes) === JSON.stringify(S.start)) return;
+  S.history.push(copy(S.tubes)); // restarting can be undone too
+  S.tubes = copy(S.start);
+  S.solved = false;
+  select(-1);
+  drawAll();
+  SND.undo();
+  updateChrome();
+  save();
+});
+$('sound').addEventListener('click', function () {
+  muted = !muted;
+  if (!muted) SND.select();
+  updateChrome();
+  save();
+});
+$('next').addEventListener('click', function () {
+  hideOverlay();
+  startLevel(S.level + 1);
+});
+
+var resizeTimer;
+window.addEventListener('resize', function () {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function () { if (S && !busy) { select(-1); build(); } }, 150);
+});
+
+// ---------- boot ----------
+var saved = load();
+if (saved) {
+  S = saved;
+  build();
+  updateChrome();
+  if (S.solved) showOverlay('Level ' + S.level + ' solved', true);
+  else getLevel(S.level + 1);
+} else {
+  startLevel(1);
+}
+
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+})();
+</script>
+</body>
+</html>
