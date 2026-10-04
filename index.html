@@ -62,6 +62,14 @@ header {
   font-variant-numeric: tabular-nums;
 }
 #level span { color: var(--ink-soft); font-size: .5em; font-weight: 500; letter-spacing: .02em; margin-right: .4em; vertical-align: .35em; }
+#stats {
+  display: flex; justify-content: center; gap: 22px;
+  margin: 2px 0 0; font-size: .95rem; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+#stats b { color: var(--ink); font-weight: 600; }
+#worth { transition: color .2s; }
+#worth.drop { color: #e53935; }
 #hint {
   height: 1.4em; margin: 4px 0 0; font-size: .9rem; color: var(--ink-soft);
   opacity: 0; transition: opacity .3s;
@@ -130,9 +138,20 @@ button {
 button:active { background: var(--btn-press); }
 button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 button svg { width: 22px; height: 22px; }
-#undo { padding: 14px 30px; font-size: 1.1rem; }
-#undo:disabled { opacity: .4; }
-#sound { padding: 12px 14px; }
+button:disabled { opacity: .38; }
+footer { gap: 10px; }
+footer button {
+  flex-direction: column; gap: 3px; width: 78px; padding: 10px 0 8px;
+  font-size: .82rem; line-height: 1.1;
+}
+footer button small { font-size: .72rem; font-weight: 400; color: var(--ink-soft); min-height: 1em; }
+#undo { width: 92px; }
+#restart.stuck { background: #2e9d5b; color: #fff; opacity: 1; animation: nudge 1.6s ease-in-out infinite; }
+#restart.stuck small { color: rgba(255,255,255,.8); }
+@keyframes nudge { 0%,100% { transform: scale(1) } 50% { transform: scale(1.08) } }
+@media (prefers-reduced-motion: reduce) { #restart.stuck { animation: none; } }
+#addTube.armed { background: var(--ink); color: var(--bg); }
+#addTube.armed small { color: var(--bg); }
 
 #overlay {
   position: fixed; inset: 0; z-index: 20;
@@ -144,6 +163,8 @@ button svg { width: 22px; height: 22px; }
 }
 #overlay.show { opacity: 1; pointer-events: auto; }
 #overlay p { margin: 0; font-size: 1.6rem; font-weight: 300; }
+#overlay #overlayDetail { font-size: .9rem; color: var(--ink-soft); margin-top: -12px; padding: 0 24px; text-align: center; }
+#overlay #overlaySub { font-size: 1.05rem; font-weight: 500; color: var(--ink-soft); margin-top: -10px; font-variant-numeric: tabular-nums; }
 #overlay button { padding: 14px 34px; font-size: 1.1rem; background: var(--ink); color: var(--bg); }
 #overlay button[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) {
@@ -155,24 +176,30 @@ button svg { width: 22px; height: 22px; }
 <body>
 <header>
   <h1 id="level"><span>Level</span><b id="levelNum">1</b></h1>
-  <p id="hint">No moves left. Undo or restart.</p>
+  <p id="stats"><span>Score <b id="score">0</b></span><span>Moves <b id="moves">0</b>/<span id="par">–</span></span><span>This level <b id="worth">100</b></span></p>
+  <p id="hint"></p>
 </header>
 <main><div id="board"></div></main>
 <footer>
   <button id="restart" aria-label="Restart level">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg>
-    Restart
+    Restart<small>−2</small>
   </button>
   <button id="undo" aria-label="Undo move">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
-    Undo
+    Undo<small>−2</small>
+  </button>
+  <button id="addTube" aria-label="Add an empty tube">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v14a3 3 0 0 0 6 0V3"/><path d="M7.5 3h9"/><path d="M19 9v6"/><path d="M16 12h6"/></svg>
+    <span id="tubeLabel">Add tube</span><small id="tubeCost">−40</small>
   </button>
   <button id="sound" aria-label="Sound on">
     <svg id="sndOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
     <svg id="sndOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>
+    Sound<small></small>
   </button>
 </footer>
-<div id="overlay" role="dialog" aria-live="polite"><p id="overlayText"></p><button id="next" hidden>Next level</button></div>
+<div id="overlay" role="dialog" aria-live="polite"><p id="overlayText"></p><p id="overlaySub"></p><p id="overlayDetail"></p><button id="next" hidden>Next level</button></div>
 
 <script type="text/plain" id="gen-src">
 // ---- Water sort level generator ----
@@ -362,6 +389,72 @@ var GEN = (function () {
     return false;
   }
 
+  // ---- Par: fewest moves to solve, via A* ----
+  // Lower bound: every pour merges at most one pair of same-color blocks, and a
+  // solved board has exactly one block per color. So (blocks - colors) <= moves left.
+  function blocks(tubes) {
+    var n = 0;
+    for (var i = 0; i < tubes.length; i++) {
+      var t = tubes[i];
+      for (var k = 0; k < t.length; k++) if (k === 0 || t[k] !== t[k - 1]) n++;
+    }
+    return n;
+  }
+  function Heap() { this.a = []; }
+  Heap.prototype.push = function (x) {
+    var a = this.a; a.push(x);
+    for (var i = a.length - 1; i > 0;) {
+      var p = (i - 1) >> 1;
+      if (a[p].f < x.f || (a[p].f === x.f && a[p].g >= x.g)) break;
+      a[i] = a[p]; a[p] = x; i = p;
+    }
+  };
+  Heap.prototype.pop = function () {
+    var a = this.a, top = a[0], last = a.pop();
+    if (a.length) {
+      a[0] = last;
+      for (var i = 0; ;) {
+        var l = 2 * i + 1, r = l + 1, m = i;
+        if (l < a.length && (a[l].f < a[m].f || (a[l].f === a[m].f && a[l].g > a[m].g))) m = l;
+        if (r < a.length && (a[r].f < a[m].f || (a[r].f === a[m].f && a[r].g > a[m].g))) m = r;
+        if (m === i) break;
+        var tmp = a[i]; a[i] = a[m]; a[m] = tmp; i = m;
+      }
+    }
+    return top;
+  };
+  // weight 1 = proven optimal (if it finishes); >1 = faster, near-optimal
+  function astar(start, cap, colors, weight, limit) {
+    var heap = new Heap(), best = {};
+    var k0 = key(start);
+    best[k0] = 0;
+    heap.push({ t: start, g: 0, f: weight * (blocks(start) - colors) });
+    var nodes = 0;
+    while (heap.a.length) {
+      var cur = heap.pop();
+      var ck = key(cur.t);
+      if (best[ck] < cur.g) continue;
+      if (solved(cur.t, cap)) return cur.g;
+      if (++nodes > limit) return -1;
+      var ms = moves(cur.t, cap);
+      for (var i = 0; i < ms.length; i++) {
+        var n = apply(cur.t, ms[i]), k = key(n), g = cur.g + 1;
+        if (best[k] !== undefined && best[k] <= g) continue;
+        best[k] = g;
+        heap.push({ t: n, g: g, f: g + weight * (blocks(n) - colors) });
+      }
+    }
+    return -1;
+  }
+  function par(start, cap, colors) {
+    var w = [1, 1.3, 2, 4];
+    for (var i = 0; i < w.length; i++) {
+      var r = astar(start, cap, colors, w[i], 60000);
+      if (r >= 0) return { moves: r, optimal: i === 0 };
+    }
+    return { moves: solve(start, cap, 40000), optimal: false };
+  }
+
   function generate(level) {
     var p = params(level);
     var rand = rng(level * 2654435761 + 12345);
@@ -380,7 +473,9 @@ var GEN = (function () {
       var dist = Math.abs(score - p.target);
       if (!best || dist < best.dist) best = { tubes: tubes, score: score, len: len, dist: dist };
     }
-    return { level: level, cap: p.cap, colors: p.colors, tubes: best.tubes, score: best.score };
+    var pr = par(best.tubes, p.cap, p.colors);
+    return { level: level, cap: p.cap, colors: p.colors, tubes: best.tubes, score: best.score,
+             par: pr.moves, parOptimal: pr.optimal, dfsLen: best.len };
   }
 
   return { generate: generate, params: params };
@@ -406,6 +501,12 @@ var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 var S = null;          // { level, cap, start, tubes, history, solved }
 var muted = false;
+// Scoring: every level is worth up to 100 points; aids cost points, floor of 10.
+// Influence, largest first: spare tube (40) > undos (2 each, up to 30) >
+// moves over the best solution (1 each, up to 20). Restart counts as an undo.
+var COST = { tube: 40, undo: 2, undoMax: 30, move: 1, moveMax: 20 };
+var LEVEL_MAX = 100, LEVEL_MIN = 10;
+var T = { score: 0, solved: 0, perfect: 0 };   // running totals
 var selected = -1;
 var busy = false;
 var geom = null;       // layout numbers
@@ -416,7 +517,7 @@ var board = $('board');
 
 // ---------- persistence ----------
 function save() {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: S, muted: muted })); } catch (e) {}
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ s: S, muted: muted, t: T })); } catch (e) {}
 }
 function load() {
   try {
@@ -424,6 +525,7 @@ function load() {
     if (!raw) return null;
     var d = JSON.parse(raw);
     muted = !!d.muted;
+    if (d.t) T = d.t;
     return d.s && d.s.tubes ? d.s : null;
   } catch (e) { return null; }
 }
@@ -482,7 +584,12 @@ function isSolved() {
 function hasMoves() {
   for (var a = 0; a < S.tubes.length; a++) {
     if (isDone(S.tubes[a])) continue;
-    for (var b = 0; b < S.tubes.length; b++) if (pourAmount(a, b)) return true;
+    var t = S.tubes[a], single = t.length && topRun(t) === t.length;
+    for (var b = 0; b < S.tubes.length; b++) {
+      // pouring a one-color bottle into an empty one changes nothing, so it doesn't count
+      if (single && !S.tubes[b].length) continue;
+      if (pourAmount(a, b)) return true;
+    }
   }
   return false;
 }
@@ -637,11 +744,53 @@ function drainUnits(i, n, dur) {
   }
 }
 
+function penalties() {
+  var extraMoves = S.par ? Math.max(0, S.moves - S.par) : 0;
+  return {
+    tube: S.extra ? COST.tube : 0,
+    undo: Math.min(COST.undoMax, (S.undos || 0) * COST.undo),
+    moves: Math.min(COST.moveMax, extraMoves * COST.move)
+  };
+}
+function worth() {
+  var p = penalties();
+  return Math.max(LEVEL_MIN, LEVEL_MAX - p.tube - p.undo - p.moves);
+}
+var lastWorth = null;
+function flashIfDropped() {
+  var w = worth();
+  if (lastWorth !== null && w < lastWorth) {
+    var el = $('worth');
+    el.classList.add('drop');
+    setTimeout(function () { el.classList.remove('drop'); }, 450);
+  }
+  lastWorth = w;
+}
+function award() {
+  if (S.awarded) return;
+  S.awarded = worth();
+  T.score += S.awarded;
+  T.solved++;
+  if (S.awarded === LEVEL_MAX) T.perfect++;
+}
+function fmt(n) { return n.toLocaleString(); }
+
 function updateChrome() {
   $('levelNum').textContent = S.level;
   $('undo').disabled = !S.history.length;
-  $('hint').classList.toggle('show', !S.solved && !isSolved() && !hasMoves());
-  $('sndOn').hidden = muted; $('sndOff').hidden = !muted;
+  var stuck = !S.solved && !isSolved() && !hasMoves();
+  $('hint').textContent = S.extra ? 'No moves left. Undo or restart.' : 'No moves left. Undo, restart, or add a tube.';
+  $('hint').classList.toggle('show', stuck);
+  $('restart').classList.toggle('stuck', stuck);
+  $('score').textContent = fmt(T.score);
+  $('worth').textContent = worth();
+  $('moves').textContent = S.moves || 0;
+  $('par').textContent = S.par || '–';
+  flashIfDropped();
+  $('addTube').disabled = !!S.extra;
+  $('restart').disabled = JSON.stringify(S.tubes) === JSON.stringify(S.start);
+  // SVG elements have no .hidden property, so toggle the attribute directly
+  $('sndOn').toggleAttribute('hidden', muted); $('sndOff').toggleAttribute('hidden', !muted);
   $('sound').setAttribute('aria-label', muted ? 'Sound off' : 'Sound on');
 }
 
@@ -709,9 +858,12 @@ function pour(a, b, amt) {
 
   // Commit to the saved state right away; animation is just catching up.
   S.history.push(copy(S.tubes));
+  S.mh.push(S.moves);
+  S.moves++;
   for (var k = 0; k < amt; k++) S.tubes[b].push(S.tubes[a].pop());
   var won = isSolved();
   S.solved = won;
+  if (won) award();
   save();
   select(-1);
   updateChrome();
@@ -795,12 +947,25 @@ function pour(a, b, amt) {
 function celebrate() {
   later(function () {
     SND.win();
-    showOverlay('Level ' + S.level + ' solved', true);
+    showWin();
   }, 350);
 }
 
-function showOverlay(text, withButton) {
+function showWin() {
+  var pts = S.awarded || worth();
+  var u = S.undos || 0;
+  var detail = S.moves + ' moves (best ' + (S.par || '?') + '), ' +
+               (u === 1 ? '1 undo' : u + ' undos') + (S.extra ? ', spare tube used' : '');
+  showOverlay('Level ' + S.level + ' solved',
+              true, (pts === LEVEL_MAX ? 'Perfect! ' : '') + '+' + pts + ' points', detail);
+}
+
+function showOverlay(text, withButton, sub, detail) {
   $('overlayText').textContent = text;
+  $('overlaySub').textContent = sub || '';
+  $('overlaySub').hidden = !sub;
+  $('overlayDetail').textContent = detail || '';
+  $('overlayDetail').hidden = !detail;
   $('next').hidden = !withButton;
   $('overlay').classList.add('show');
   if (withButton) setTimeout(function () { $('next').focus(); }, 50);
@@ -812,7 +977,9 @@ function startLevel(level) {
   var t = setTimeout(function () { showOverlay('Mixing level ' + level + '…', false); }, 120);
   getLevel(level).then(function (r) {
     clearTimeout(t);
-    S = { level: level, cap: r.cap, start: copy(r.tubes), tubes: copy(r.tubes), history: [], solved: false };
+    S = { level: level, cap: r.cap, start: copy(r.tubes), tubes: copy(r.tubes), history: [], solved: false,
+          par: r.par, moves: 0, mh: [], undos: 0, extra: 0, awarded: 0 };
+    lastWorth = null;
     save();
     selected = -1;
     build();
@@ -827,7 +994,9 @@ $('undo').addEventListener('click', function () {
   if (busy || !S.history.length) return;
   cancelAnimations();
   S.tubes = S.history.pop();
+  S.moves = S.mh.length ? S.mh.pop() : 0;
   S.solved = false;
+  S.undos = (S.undos || 0) + 1;
   hideOverlay();
   drawAll();
   SND.undo();
@@ -839,13 +1008,44 @@ $('restart').addEventListener('click', function () {
   if (JSON.stringify(S.tubes) === JSON.stringify(S.start)) return;
   cancelAnimations();
   S.history.push(copy(S.tubes)); // restarting can be undone too
+  S.mh.push(S.moves);
+  S.moves = 0;
   S.tubes = copy(S.start);
   S.solved = false;
+  S.undos = (S.undos || 0) + 1;
   drawAll();
   SND.undo();
   updateChrome();
   save();
 });
+var armTimer = null;
+function disarm() {
+  clearTimeout(armTimer);
+  $('addTube').classList.remove('armed');
+  $('tubeLabel').textContent = 'Add tube';
+}
+$('addTube').addEventListener('click', function () {
+  if (busy || S.extra || S.solved) return;
+  var btn = $('addTube');
+  if (!btn.classList.contains('armed')) {
+    // first tap only arms it, so a stray tap can't cost 40 points
+    btn.classList.add('armed');
+    $('tubeLabel').textContent = 'Tap again';
+    armTimer = setTimeout(disarm, 2500);
+    return;
+  }
+  disarm();
+  S.extra = 1;
+  // The new tube stays through undo and restart: pad every snapshot with it.
+  S.tubes.push([]);
+  S.start.push([]);
+  S.history.forEach(function (h) { h.push([]); });
+  build();
+  SND.select();
+  updateChrome();
+  save();
+});
+
 $('sound').addEventListener('click', function () {
   muted = !muted;
   if (!muted) SND.select();
@@ -867,9 +1067,16 @@ window.addEventListener('resize', function () {
 var saved = load();
 if (saved) {
   S = saved;
+  if (!S.mh) { S.mh = S.history.map(function (_, i) { return i; }); S.moves = S.history.length; }
+  if (S.undos == null) S.undos = 0;
+  if (S.par == null) {
+    getLevel(S.level).then(function (r) {   // same level number = same puzzle, so par matches
+      if (r.level === S.level && S.par == null) { S.par = r.par; save(); updateChrome(); }
+    });
+  }
   build();
   updateChrome();
-  if (S.solved) showOverlay('Level ' + S.level + ' solved', true);
+  if (S.solved) { award(); save(); showWin(); }
   else getLevel(S.level + 1);
 } else {
   startLevel(1);
