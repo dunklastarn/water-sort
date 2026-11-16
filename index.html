@@ -171,9 +171,49 @@ footer button small { font-size: .72rem; font-weight: 400; color: var(--ink-soft
   .bottle, .bottle.pouring { transition: none; }
   .unit.grow, .unit.shrink, .stopper, .bottle.shake { animation: none; }
 }
+
+/* progress menu + backup sheet */
+#menuBtn {
+  position: absolute; z-index: 6;
+  top: calc(env(safe-area-inset-top, 0px) + 12px); right: 14px;
+  width: 40px; height: 40px; padding: 0; border-radius: 12px;
+  font-size: 1.5rem; line-height: 1; color: var(--ink-soft); background: var(--btn);
+}
+.sheet {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.sheet[hidden] { display: none !important; }
+.sheet-card {
+  width: 100%; max-width: 420px; background: var(--bg);
+  border: 1px solid var(--edge); border-radius: 20px; padding: 22px;
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: calc(100% - 40px); overflow: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.sheet-card h2 { margin: 0; font-weight: 300; font-size: 1.5rem; }
+.sheet-card button { justify-content: center; border-radius: 14px; padding: 14px; }
+.sheet-card button.primary { background: var(--ink); color: var(--bg); }
+.sheet-card button.ghost { background: transparent; }
+.sheet-card .row2 { display: flex; gap: 10px; }
+.sheet-card .row2 button { flex: 1; }
+.sheet-card .note { font-size: .85rem; color: var(--ink-soft); margin: 2px 0; }
+.sheet-card .note.ok { color: #2e9d5b; }
+.sheet-card .note.err { color: #e53935; }
+.sheet-card textarea {
+  width: 100%; min-height: 128px; resize: vertical;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .78rem;
+  background: var(--btn); color: var(--ink); border: 1px solid var(--edge);
+  border-radius: 12px; padding: 12px;
+  -webkit-user-select: text; user-select: text;
+}
+.sheet-card input[type=file] { font: inherit; color: var(--ink-soft); font-size: .85rem; }
 </style>
 </head>
 <body>
+<button id="menuBtn" aria-label="Menu and progress backup">⋯</button>
 <header>
   <h1 id="level"><span>Level</span><b id="levelNum">1</b></h1>
   <p id="stats"><span>Score <b id="score">0</b></span><span>Moves <b id="moves">0</b>/<span id="par">–</span></span><span>This level <b id="worth">100</b></span></p>
@@ -199,6 +239,32 @@ footer button small { font-size: .72rem; font-weight: 400; color: var(--ink-soft
     Sound<small></small>
   </button>
 </footer>
+<div id="menu" class="sheet" hidden>
+  <div class="sheet-card">
+    <div id="mMain">
+      <h2>Progress</h2>
+      <p class="note" id="mStats"></p>
+      <button class="primary" id="mExport">Export progress</button>
+      <button id="mImport">Import progress</button>
+      <button class="ghost" id="mClose">Close</button>
+    </div>
+    <div id="mExportV" hidden>
+      <h2>Export</h2>
+      <p class="note">Back this up, or move it to another phone. Download a file or copy the text — either works.</p>
+      <textarea id="mOut" readonly></textarea>
+      <div class="row2"><button class="primary" id="mDownload">Download file</button><button id="mCopy">Copy</button></div>
+      <button class="ghost" id="mBack1">Back</button>
+    </div>
+    <div id="mImportV" hidden>
+      <h2>Import</h2>
+      <p class="note">Paste exported text below, or choose a file. This replaces the progress on this device.</p>
+      <textarea id="mIn" placeholder="Paste your exported progress here…"></textarea>
+      <input type="file" id="mFile" accept=".json,.txt,application/json,text/plain">
+      <p class="note" id="mMsg"></p>
+      <div class="row2"><button class="primary" id="mDoImport">Import</button><button class="ghost" id="mBack2">Back</button></div>
+    </div>
+  </div>
+</div>
 <div id="overlay" role="dialog" aria-live="polite"><p id="overlayText"></p><p id="overlaySub"></p><p id="overlayDetail"></p><button id="next" hidden>Next level</button></div>
 
 <script type="text/plain" id="gen-src">
@@ -1072,6 +1138,81 @@ $('sound').addEventListener('click', function () {
 $('next').addEventListener('click', function () {
   hideOverlay();
   startLevel(S.level + 1);
+});
+
+// ---------- progress export / import ----------
+// Captures the whole save (level, score, current board) so a restore is exact.
+function snapshot() {
+  var raw = null;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) {}
+  if (!raw) { try { raw = JSON.stringify({ s: S, muted: muted, t: T }); } catch (e) { raw = '{}'; } }
+  var saveBlob; try { saveBlob = JSON.parse(raw); } catch (e) { saveBlob = {}; }
+  return {
+    app: 'water-sort', version: 1, exportedAt: new Date().toISOString(),
+    level: (S && S.level) || 1, score: (T && T.score) || 0,
+    solved: (T && T.solved) || 0, perfect: (T && T.perfect) || 0,
+    save: saveBlob
+  };
+}
+function mShow(view) { ['mMain', 'mExportV', 'mImportV'].forEach(function (id) { $(id).hidden = (id !== view); }); }
+function openMenu() {
+  $('mStats').textContent = 'Level ' + ((S && S.level) || 1) + ' · Score ' + fmt((T && T.score) || 0) +
+    ' · ' + ((T && T.solved) || 0) + ' solved';
+  mShow('mMain');
+  $('menu').hidden = false;
+}
+function closeMenu() { $('menu').hidden = true; }
+$('menuBtn').addEventListener('click', openMenu);
+$('mClose').addEventListener('click', closeMenu);
+$('menu').addEventListener('click', function (e) { if (e.target === $('menu')) closeMenu(); });
+$('mBack1').addEventListener('click', function () { mShow('mMain'); });
+$('mBack2').addEventListener('click', function () { mShow('mMain'); });
+
+$('mExport').addEventListener('click', function () {
+  $('mOut').value = JSON.stringify(snapshot(), null, 2);
+  mShow('mExportV');
+  setTimeout(function () { try { $('mOut').focus(); $('mOut').select(); } catch (e) {} }, 50);
+});
+$('mDownload').addEventListener('click', function () {
+  var name = 'water-sort-progress-' + new Date().toISOString().slice(0, 10) + '.json';
+  try {
+    var blob = new Blob([$('mOut').value], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  } catch (e) { alert('Download is not available here — copy the text instead.'); }
+});
+$('mCopy').addEventListener('click', function () {
+  var t = $('mOut'), b = $('mCopy');
+  function done(ok) { b.textContent = ok ? 'Copied ✓' : 'Use ⌘/Ctrl+C'; setTimeout(function () { b.textContent = 'Copy'; }, 1800); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t.value).then(function () { done(true); }, function () { t.focus(); t.select(); done(false); });
+  } else { t.focus(); t.select(); try { done(document.execCommand('copy')); } catch (e) { done(false); } }
+});
+
+$('mImport').addEventListener('click', function () { $('mMsg').textContent = ''; $('mMsg').className = 'note'; $('mIn').value = ''; mShow('mImportV'); });
+$('mFile').addEventListener('change', function (e) {
+  var f = e.target.files && e.target.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function () { $('mIn').value = String(r.result || ''); };
+  r.readAsText(f);
+});
+function parseImport(text) {
+  if (!text) return { error: 'Nothing to import — paste your text or choose a file first.' };
+  var d; try { d = JSON.parse(text); } catch (e) { return { error: 'That doesn’t look like valid exported text.' }; }
+  if (d && typeof d === 'object' && d.save && typeof d.save === 'object') d = d.save; // unwrap export
+  if (!d || typeof d !== 'object' || (!d.t && !d.s)) return { error: 'No water-sort progress found in that text.' };
+  return { save: d };
+}
+$('mDoImport').addEventListener('click', function () {
+  var res = parseImport($('mIn').value.trim()), msg = $('mMsg');
+  if (res.error) { msg.textContent = res.error; msg.className = 'note err'; return; }
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(res.save)); }
+  catch (e) { msg.textContent = 'Could not save — storage may be full or blocked.'; msg.className = 'note err'; return; }
+  msg.textContent = 'Imported! Reloading…'; msg.className = 'note ok';
+  setTimeout(function () { location.reload(); }, 600);
 });
 
 var resizeTimer;
